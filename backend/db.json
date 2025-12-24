@@ -9,17 +9,10 @@
     },
     {
       "name": "Bat",
-      "quantity": "15",
+      "quantity": 20,
       "threshold": "1",
       "price": "500",
       "id": "1766567699838"
-    },
-    {
-      "name": "Bat",
-      "quantity": "2",
-      "threshold": "1",
-      "price": "500",
-      "id": "1766568174488"
     },
     {
       "name": "chair",
@@ -41,6 +34,13 @@
       "threshold": "1",
       "price": "200",
       "id": "1766568671993"
+    },
+    {
+      "name": "Bat",
+      "quantity": "2",
+      "threshold": 10,
+      "price": "1000",
+      "id": "1766571236591"
     }
   ]
 }

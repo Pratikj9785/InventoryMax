@@ -32,12 +32,35 @@ app.get('/api/inventory', async (req, res) => {
 
 app.post('/api/inventory', async (req, res) => {
   const item = req.body;
-  // Simple ID generation
-  item.id = Date.now().toString();
   await db.read();
-  db.data.inventory.push(item);
-  await db.write();
-  res.status(201).json(item);
+
+  // specific logic to merge items if name matches (case-insensitive) AND price matches
+  const existingItemIndex = db.data.inventory.findIndex(
+    i => i.name.toLowerCase().trim() === item.name.toLowerCase().trim() && Number(i.price) === Number(item.price)
+  );
+
+  if (existingItemIndex > -1) {
+    // Update existing item
+    const existingItem = db.data.inventory[existingItemIndex];
+    // meaningful merge: add quantities
+    const newQuantity = Number(existingItem.quantity) + Number(item.quantity);
+    db.data.inventory[existingItemIndex] = {
+      ...existingItem,
+      quantity: newQuantity,
+      // Optional: Update price or other fields if desired, but usually keep existing or overwrite?
+      // Let's keep existing price unless specified otherwise, or overwrite? 
+      // User said "add it to previous item". Usually implies just quantity.
+      // But if price changed, maybe update price? Let's stick to quantity merge for now.
+    };
+    await db.write();
+    res.json(db.data.inventory[existingItemIndex]);
+  } else {
+    // Create new
+    item.id = Date.now().toString();
+    db.data.inventory.push(item);
+    await db.write();
+    res.status(201).json(item);
+  }
 });
 
 app.put('/api/inventory/:id', async (req, res) => {
@@ -64,7 +87,7 @@ app.delete('/api/inventory/:id', async (req, res) => {
 
 // Agentic AI Endpoint
 app.post('/api/analyze', async (req, res) => {
-  const { context } = req.body; 
+  const { context } = req.body;
   // context could be "Identify dead stock" or "Suggest reorder for SKU-123"
 
   // We pass the current inventory snapshot to the agent
@@ -96,12 +119,12 @@ app.post('/api/analyze', async (req, res) => {
     }
     // Parse output if it's JSON, or return raw
     try {
-        // Find JSON in output if mixed with logs
-        const jsonMatch = output.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-        const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { message: output };
-        res.json(result);
+      // Find JSON in output if mixed with logs
+      const jsonMatch = output.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { message: output };
+      res.json(result);
     } catch (e) {
-        res.json({ message: output });
+      res.json({ message: output });
     }
   });
 });
