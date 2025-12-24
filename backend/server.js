@@ -5,7 +5,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Low } from 'lowdb';
 import { JSONFile } from 'lowdb/node';
-import { spawn } from 'child_process';
+
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -86,48 +86,7 @@ app.delete('/api/inventory/:id', async (req, res) => {
 });
 
 // Agentic AI Endpoint
-app.post('/api/analyze', async (req, res) => {
-  const { context } = req.body;
-  // context could be "Identify dead stock" or "Suggest reorder for SKU-123"
 
-  // We pass the current inventory snapshot to the agent
-  await db.read();
-  const inventoryData = JSON.stringify(db.data.inventory);
-
-  // Spawn Python process
-  // Adjust path to python and script as needed. Assuming 'python' is in PATH.
-  const pythonProcess = spawn('python', ['../agents/inventory_team.py', context], {
-    cwd: join(__dirname, '../agents'),
-  });
-
-  let output = '';
-  // Send inventory data via stdin
-  pythonProcess.stdin.write(inventoryData);
-  pythonProcess.stdin.end();
-
-  pythonProcess.stdout.on('data', (data) => {
-    output += data.toString();
-  });
-
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`Agent Error: ${data}`);
-  });
-
-  pythonProcess.on('close', (code) => {
-    if (code !== 0) {
-      return res.status(500).json({ error: 'Agent analysis failed' });
-    }
-    // Parse output if it's JSON, or return raw
-    try {
-      // Find JSON in output if mixed with logs
-      const jsonMatch = output.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { message: output };
-      res.json(result);
-    } catch (e) {
-      res.json({ message: output });
-    }
-  });
-});
 
 const PORT = 5000;
 app.listen(PORT, () => {
