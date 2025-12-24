@@ -12,7 +12,7 @@ def main():
         print("Error: OPENAI_API_KEY not found.")
         sys.exit(1)
 
-    config_list = [{"model": "gpt-4o", "api_key": api_key}] # Using gpt-4o or similar
+    config_list = [{"model": "gpt-4o", "api_key": "mock", "base_url": "http://localhost:4000/v1"}]
     llm_config = {"config_list": config_list}
 
     # 1. Read Inventory Data from Stdin
@@ -33,7 +33,7 @@ def main():
     user_proxy = UserProxyAgent(
         name="User_Proxy",
         system_message="A human admin. Approve plans.",
-        code_execution_config={"last_n_messages": 2, "work_dir": "groupchat"},
+        code_execution_config={"last_n_messages": 2, "work_dir": "groupchat", "use_docker": False},
         human_input_mode="NEVER" # Automated for API response
     )
 
