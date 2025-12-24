@@ -1,0 +1,11 @@
+{
+  "inventory": [
+    {
+      "name": "Tshirts",
+      "quantity": "1",
+      "threshold": "1",
+      "price": "100",
+      "id": "1766563357485"
+    }
+  ]
+}
