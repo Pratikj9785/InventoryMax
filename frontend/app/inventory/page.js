@@ -101,39 +101,64 @@ export default function InventoryPage() {
         try {
             if (!window.puter) throw new Error("Puter.js not loaded");
 
-            // --- Data Enrichment (Simulating Sales Data) ---
+            // --- Data Enrichment (Simulating Detailed Sales Data) ---
             const enrichedItems = items.map(item => {
-                // Simulate random daily sales between 0 and 20% of current stock
-                const avgDailySales = Math.max(1, Math.floor(Math.random() * (Number(item.quantity) * 0.2)));
-                const ageDays = Math.floor((Date.now() - Number(item.id)) / (1000 * 60 * 60 * 24));
+                const currentStock = Number(item.quantity);
+                const price = Number(item.price);
+
+                // Simulate scenarios based on item ID hash (to be deterministic-ish) or just random
+                // We want to generate realistic looking data for the prompt
+                const isDeadStock = item.name.toLowerCase().includes('old') || Math.random() < 0.1;
+                const avgDailySales = isDeadStock ? (Math.random() * 0.5) : Math.max(1, Math.floor(Math.random() * 20));
+
+                // Generate 5 data points for last 90 days trend (simplified to 5 points as per user example)
+                // "sales_last_90_days": [11,12,13,12,11]
+                const trendBase = avgDailySales;
+                const salesLast90Days = Array.from({ length: 5 }, () => Math.max(0, Math.floor(trendBase + (Math.random() * 4 - 2))));
+
+                const aging60Plus = isDeadStock ? Math.floor(currentStock * 0.8) : Math.floor(Math.random() * (currentStock * 0.1));
 
                 return {
                     sku_id: `SKU-${item.id.slice(-4)}`,
                     name: item.name,
-                    current_stock: Number(item.quantity),
-                    price: Number(item.price),
-                    avg_daily_sales: avgDailySales,
-                    age_days: isNaN(ageDays) ? 0 : ageDays
+                    current_stock: currentStock,
+                    avg_daily_sales: Number(avgDailySales.toFixed(1)),
+                    sales_last_90_days: salesLast90Days,
+                    aging_60_plus: aging60Plus,
+                    supplier_lead_time_days: Math.floor(Math.random() * 10) + 5 // 5-15 days
                 };
             });
 
-            const inventoryContext = JSON.stringify(enrichedItems);
-
             // --- Step 1: Inventory Analyst ---
             setAiStatus("Agent 1/3: Inventory Analyst is crunching numbers...");
+
+            // We process items in batches or one big prompt? User example shows single item input, 
+            // but in a real app we might do batch. 
+            // For this implementation, let's send ALL items in one context and ask for an array back.
+
             const analystPrompt = `
             Role: Inventory Analyst.
-            Task: Analyze raw data and generate insights.
-            Inputs: ${inventoryContext}
+            Task: Analyze inventory data and generate detailed insights based on specific logic.
             
-            Strictly Output ONLY a JSON Array of objects (no markdown, no plain text) with this exact schema for each item:
+            Input Data:
+            ${JSON.stringify(enrichedItems)}
+
+            Logic Guide:
+            1. HEALTHY: Stock covers 10-60 days.
+            2. OVERSTOCKED: Stock covers > 60 days.
+            3. UNDERSTOCKED: Stock covers < 10 days.
+            4. DEAD_STOCK: Avg daily sales < 1 AND Age > 90 days.
+            
+            Strictly Output ONLY a JSON Array of objects with this exact schema:
             {
               "sku_id": "SKU-...",
               "name": "Item Name",
               "current_stock": 123,
-              "days_of_inventory": (calculate: current_stock / avg_daily_sales),
-              "stock_health": "OVERSTOCKED" | "HEALTHY" | "LOW_STOCK",
-              "aging_risk": "HIGH" | "MEDIUM" | "LOW",
+              "avg_daily_sales": 12,
+              "days_of_inventory": 10,
+              "stock_health": "HEALTHY" | "OVERSTOCKED" | "UNDERSTOCKED" | "DEAD_STOCK",
+              "demand_trend": "STABLE" | "DECLINING" | "INCREASING" | "NEGLIGIBLE",
+              "aging_risk": "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH",
               "key_observations": ["observation 1", "observation 2"]
             }
             `;
@@ -146,17 +171,27 @@ export default function InventoryPage() {
             setAiStatus("Agent 2/3: Procurement Manager is deciding actions...");
             const procurementPrompt = `
             Role: Procurement Manager.
-            Task: Convert analysis into actions.
-            Input Analyst Report: ${JSON.stringify(analystData)}
+            Task: Make procurement decisions based on Analyst insights.
+            
+            Analyst Output:
+            ${JSON.stringify(analystData)}
+            
+            Rules:
+            - IF OVERSTOCKED & DECLINING -> HOLD, CLEARANCE_DISCOUNT
+            - IF UNDERSTOCKED & INCREASING -> URGENT_REORDER, NO_PROMOTIONS
+            - IF HEALTHY -> REORDER (if needed), NORMAL_PRICING
+            - IF DEAD_STOCK -> STOP_FOREVER, AGGRESSIVE_CLEARANCE
             
             Strictly Output ONLY a JSON Array of objects with this exact schema:
             {
               "sku_id": "SKU-...",
-              "procurement_decision": "HOLD" | "REORDER",
-              "recommended_reorder_qty": 0,
-              "sales_action": "CLEARANCE" | "NONE" | "PROMOTION",
-              "suggested_discount": "20%",
-              "rationale": ["reason 1"]
+              "name": "Item Name",
+              "procurement_decision": "REORDER" | "HOLD" | "URGENT_REORDER" | "STOP_FOREVER",
+              "recommended_reorder_qty": 150,
+              "sales_action": "NORMAL_PRICING" | "CLEARANCE_DISCOUNT" | "NO_PROMOTIONS" | "AGGRESSIVE_CLEARANCE",
+              "suggested_discount": "20%" (or null/0%),
+              "rationale": ["reason 1"],
+              "review_after_days": 7
             }
             `;
             const procRes = await window.puter.ai.chat(procurementPrompt);
@@ -168,18 +203,23 @@ export default function InventoryPage() {
             setAiStatus("Agent 3/3: Team Lead is finalizing executive plan...");
             const managerPrompt = `
             Role: Team Lead.
-            Task: Final decision & executive summary.
-            Input Procurement Recommendations: ${JSON.stringify(procData)}
+            Task: Finalize decisions and estimate business impact.
+            
+            Procurement Recommendations:
+            ${JSON.stringify(procData)}
             
             Strictly Output ONLY a JSON Array of objects with this exact schema:
             {
               "sku_id": "SKU-...",
-              "final_decision": "Decision String",
+              "name": "Item Name",
+              "final_decision": "REORDER_APPROVED" | "NO_REORDER + DISCOUNT" | "URGENT_REORDER_APPROVED" | "LIQUIDATION",
+              "approved_actions": ["action 1", "action 2"],
               "business_impact": {
+                "stockout_risk": "LOW" | "HIGH" | "CRITICAL",
                 "capital_unlocked_estimate": 0,
-                "stock_risk_reduction": "HIGH" | "LOW"
+                "risk_reduction": "HIGH" | "LOW"
               },
-              "executive_summary": "One sentence summary."
+              "executive_summary": "Short executive summary string."
             }
             `;
             const leadRes = await window.puter.ai.chat(managerPrompt);
@@ -204,20 +244,30 @@ export default function InventoryPage() {
                     <span className="text-xs text-gray-500 ml-2 font-mono">[{item.sku_id}]</span>
                 </div>
                 <div className="flex gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${item.stock_health === 'OVERSTOCKED' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${item.stock_health === 'OVERSTOCKED' || item.stock_health === 'DEAD_STOCK' ? 'bg-red-50 text-red-700 border-red-200' :
+                        item.stock_health === 'UNDERSTOCKED' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                            'bg-green-50 text-green-700 border-green-200'
+                        }`}>
                         {item.stock_health}
                     </span>
-                    {item.aging_risk === 'HIGH' && <span className="bg-orange-50 text-orange-800 border border-orange-200 px-2 py-0.5 rounded text-xs font-bold">AGING RISK</span>}
+                    <span className="bg-gray-50 text-gray-700 border border-gray-200 px-2 py-0.5 rounded text-xs font-bold">
+                        {item.demand_trend}
+                    </span>
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm text-black">
                 <div className="flex flex-col">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Days of Inventory</span>
-                    <span className="font-mono font-bold text-lg">{Math.round(item.days_of_inventory)}</span>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">DOI / Aging Risk</span>
+                    <div className="flex gap-2">
+                        <span className="font-mono font-bold text-lg">{item.days_of_inventory}d</span>
+                        <span className={`text-xs px-1 rounded flex items-center ${item.aging_risk === 'HIGH' || item.aging_risk === 'VERY_HIGH' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>{item.aging_risk}</span>
+                    </div>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Key Observation</span>
-                    <span className="italic">{item.key_observations?.[0]}</span>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">Observations</span>
+                    <ul className="list-disc list-inside text-xs text-gray-700">
+                        {item.key_observations?.map((obs, i) => <li key={i}>{obs}</li>)}
+                    </ul>
                 </div>
             </div>
         </div>
@@ -225,21 +275,28 @@ export default function InventoryPage() {
 
     const renderProcurementCard = (item) => (
         <div key={item.sku_id} className="bg-white p-4 rounded-lg border border-purple-100 shadow-sm mb-2 hover:shadow-md transition-shadow relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.procurement_decision === 'STOP_FOREVER' ? 'bg-red-500' : 'bg-purple-500'}`}></div>
             <div className="flex justify-between items-start mb-2 pl-2">
-                <span className="font-mono font-bold text-black">{item.sku_id}</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-bold border ${item.procurement_decision === 'REORDER' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                <div>
+                    <span className="font-mono font-bold text-black block">{item.name}</span>
+                    <span className="text-xs text-gray-500 font-mono">{item.sku_id}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold border ${item.procurement_decision.includes('REORDER') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-700 border-gray-200'
+                    }`}>
                     {item.procurement_decision}
                 </span>
             </div>
             <div className="text-sm text-black pl-2 space-y-2">
-                {item.sales_action !== 'NONE' && (
-                    <div className="flex items-center gap-2 font-semibold text-red-600">
-                        <TrendingDown size={16} />
-                        <span>{item.sales_action}</span>
-                        <span className="bg-red-100 text-red-800 text-xs px-1 rounded">{item.suggested_discount}</span>
-                    </div>
-                )}
+                <div className="flex justify-between">
+                    {item.sales_action !== 'NORMAL_PRICING' && (
+                        <div className="flex items-center gap-2 font-semibold text-red-600">
+                            <TrendingDown size={16} />
+                            <span>{item.sales_action}</span>
+                            {item.suggested_discount && <span className="bg-red-100 text-red-800 text-xs px-1 rounded">{item.suggested_discount}</span>}
+                        </div>
+                    )}
+                    {item.review_after_days && <span className="text-xs text-gray-400">Rev: {item.review_after_days}d</span>}
+                </div>
                 {item.recommended_reorder_qty > 0 && (
                     <div className="flex items-center gap-2 font-semibold text-green-600">
                         <Package size={16} />
@@ -247,7 +304,10 @@ export default function InventoryPage() {
                     </div>
                 )}
                 <div className="text-xs text-gray-600 border-t border-gray-100 pt-2 mt-2">
-                    <span className="font-semibold text-purple-700">Rationale:</span> {item.rationale?.[0]}
+                    <span className="font-semibold text-purple-700">Rationale:</span>
+                    <ul className="list-disc list-inside inline-block ml-1">
+                        {item.rationale?.map((r, i) => <span key={i} className="mr-2">{r}</span>)}
+                    </ul>
                 </div>
             </div>
         </div>
@@ -256,26 +316,41 @@ export default function InventoryPage() {
     const renderLeadCard = (item) => (
         <div key={item.sku_id} className="bg-gray-900 p-4 rounded-lg border border-gray-700 shadow-md mb-2 text-white">
             <div className="flex justify-between items-start mb-2">
-                <span className="font-mono font-bold text-gray-300">{item.sku_id}</span>
-                <span className="bg-emerald-500 text-white px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 shadow-sm">
+                <div>
+                    <span className="font-mono font-bold text-gray-300 block">{item.name}</span>
+                    <span className="text-xs text-gray-500 font-mono">{item.sku_id}</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 shadow-sm ${item.final_decision.includes('APPROVED') ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`}>
                     <CheckCircle size={12} /> {item.final_decision}
                 </span>
             </div>
             <div className="text-sm">
-                <div className="font-medium mb-3 text-gray-100 leading-relaxed">"{item.executive_summary}"</div>
+                <div className="font-medium mb-3 text-gray-100 leading-relaxed">&quot;{item.executive_summary}&quot;</div>
+
                 <div className="grid grid-cols-2 gap-4 mt-2 pt-3 border-t border-gray-700">
-                    <div className="flex flex-col">
-                        <span className="text-xs text-gray-400 uppercase">Capital Unlocked</span>
-                        <span className="font-mono text-emerald-400 font-bold flex items-center">
-                            <DollarSign size={14} /> {item.business_impact?.capital_unlocked_estimate?.toLocaleString()}
-                        </span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs text-gray-400 uppercase">Risk Reduction</span>
-                        <span className="font-mono text-blue-400 font-bold">
-                            {item.business_impact?.stock_risk_reduction}
-                        </span>
-                    </div>
+                    {item.business_impact?.capital_unlocked_estimate > 0 && (
+                        <div className="flex flex-col">
+                            <span className="text-xs text-gray-400 uppercase">Capital Unlock</span>
+                            <span className="font-mono text-emerald-400 font-bold flex items-center">
+                                <DollarSign size={14} /> {item.business_impact.capital_unlocked_estimate.toLocaleString()}
+                            </span>
+                        </div>
+                    )}
+                    {item.business_impact?.stockout_risk && (
+                        <div className="flex flex-col">
+                            <span className="text-xs text-gray-400 uppercase">Stockout Risk</span>
+                            <span className={`font-mono font-bold ${item.business_impact.stockout_risk === 'CRITICAL' ? 'text-red-400' : 'text-blue-400'}`}>
+                                {item.business_impact.stockout_risk}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-2 text-xs text-gray-400">
+                    <span className="uppercase tracking-wider">Approved Actions:</span>
+                    <ul className="list-disc list-inside mt-1 text-gray-300">
+                        {item.approved_actions?.map((act, i) => <li key={i}>{act}</li>)}
+                    </ul>
                 </div>
             </div>
         </div>

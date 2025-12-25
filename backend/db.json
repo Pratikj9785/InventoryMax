@@ -31,7 +31,7 @@
     {
       "name": "bag",
       "quantity": "8",
-      "threshold": "1",
+      "threshold": "10",
       "price": "200",
       "id": "1766568671993"
     },
