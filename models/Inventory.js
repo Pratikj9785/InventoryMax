@@ -1,3 +1,4 @@
+import 'server-only';
 import mongoose from 'mongoose';
 
 const InventorySchema = new mongoose.Schema({
