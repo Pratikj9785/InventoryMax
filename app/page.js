@@ -3,6 +3,20 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { TrendingUp, AlertTriangle, Package, Activity } from 'lucide-react';
 
+const Card = ({ title, value, icon: Icon, color }) => (
+  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+    <div className="flex justify-between items-start">
+      <div>
+        <p className="text-gray-500 text-sm font-medium">{title}</p>
+        <h3 className="text-3xl font-bold mt-2 text-gray-800">{value}</h3>
+      </div>
+      <div className={`p-3 rounded-xl ${color}`}>
+        <Icon size={24} className="text-white" />
+      </div>
+    </div>
+  </div>
+);
+
 export default function Dashboard() {
   const [stats, setStats] = useState({ totalItems: 0, totalValue: 0, lowStock: 0 });
   const [loading, setLoading] = useState(true);
@@ -24,19 +38,7 @@ export default function Dashboard() {
       });
   }, []);
 
-  const Card = ({ title, value, icon: Icon, color }) => (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-gray-500 text-sm font-medium">{title}</p>
-          <h3 className="text-3xl font-bold mt-2 text-gray-800">{value}</h3>
-        </div>
-        <div className={`p-3 rounded-xl ${color}`}>
-          <Icon size={24} className="text-white" />
-        </div>
-      </div>
-    </div>
-  );
+
 
   return (
     <div className="space-y-8">
