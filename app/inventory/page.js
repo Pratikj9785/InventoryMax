@@ -17,7 +17,7 @@ export default function InventoryPage() {
     //Added
     const fetchItems = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/inventory');
+            const res = await axios.get('/api/inventory');
             setItems(res.data || []);
         } catch (err) { 
             console.error("API error:", err);
@@ -31,23 +31,29 @@ export default function InventoryPage() {
         e.preventDefault();
         try {
             if (editId) {
-                await axios.put(`http://localhost:5000/api/inventory/${editId}`, formData);
+                await axios.put(`/api/inventory/${editId}`, formData);
             } else {
-                await axios.post('http://localhost:5000/api/inventory', formData);
+                await axios.post('/api/inventory', formData);
             }
             setShowModal(false);
             setFormData({ name: '', quantity: '', threshold: 10, price: '' });
             setEditId(null);
             fetchItems();
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error("Save error:", err);
+            alert("Failed to save item. Please try again.");
+        }
     };
 
     const handleDelete = async (id) => {
         if (!confirm("Are you sure?")) return;
         try {
-            await axios.delete(`http://localhost:5000/api/inventory/${id}`);
+            await axios.delete(`/api/inventory/${id}`);
             fetchItems();
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error("Delete error:", err);
+            alert("Failed to delete item. Please try again.");
+        }
     };
 
     const openEdit = (item) => {
