@@ -17,7 +17,7 @@ export default function InventoryPage() {
     //Added
     const fetchItems = async () => {
         try {
-            const res = await axios.get('/api/inventory');
+            const res = await axios.get('http://localhost:5000/api/inventory');
             setItems(res.data);
         } catch (err) { console.error(err); }
     };
@@ -28,9 +28,9 @@ export default function InventoryPage() {
         e.preventDefault();
         try {
             if (editId) {
-                await axios.put(`/api/inventory/${editId}`, formData);
+                await axios.put(`http://localhost:5000/api/inventory/${editId}`, formData);
             } else {
-                await axios.post('/api/inventory', formData);
+                await axios.post('http://localhost:5000/api/inventory', formData);
             }
             setShowModal(false);
             setFormData({ name: '', quantity: '', threshold: 10, price: '' });
@@ -42,7 +42,7 @@ export default function InventoryPage() {
     const handleDelete = async (id) => {
         if (!confirm("Are you sure?")) return;
         try {
-            await axios.delete(`/api/inventory/${id}`);
+            await axios.delete(`http://localhost:5000/api/inventory/${id}`);
             fetchItems();
         } catch (err) { console.error(err); }
     };
