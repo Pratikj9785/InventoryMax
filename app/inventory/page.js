@@ -18,8 +18,11 @@ export default function InventoryPage() {
     const fetchItems = async () => {
         try {
             const res = await axios.get('http://localhost:5000/api/inventory');
-            setItems(res.data);
-        } catch (err) { console.error(err); }
+            setItems(res.data || []);
+        } catch (err) { 
+            console.error("API error:", err);
+            setItems([]); // Set empty array on error
+        }
     };
 
     useEffect(() => { fetchItems(); }, []);

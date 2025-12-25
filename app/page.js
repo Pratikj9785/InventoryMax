@@ -22,10 +22,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch stats
+    // Fetch stats - handle missing API gracefully
     axios.get('/api/inventory')
       .then(res => {
-        const items = res.data;
+        const items = res.data || [];
         const totalItems = items.length;
         const totalValue = items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
         const lowStock = items.filter(i => Number(i.quantity) < (Number(i.threshold) || 10)).length;
@@ -33,7 +33,9 @@ export default function Dashboard() {
         setLoading(false);
       })
       .catch(err => {
+        // API not available - set default values
         console.error("Backend error:", err);
+        setStats({ totalItems: 0, totalValue: 0, lowStock: 0 });
         setLoading(false);
       });
   }, []);
