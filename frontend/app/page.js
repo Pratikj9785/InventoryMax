@@ -9,7 +9,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     // Fetch stats
-    axios.get('http://localhost:5000/api/inventory')
+    axios.get('/api/inventory')
       .then(res => {
         const items = res.data;
         const totalItems = items.length;
